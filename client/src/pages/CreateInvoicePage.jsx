@@ -10,6 +10,7 @@ export default function CreateInvoicePage() {
     amount: '',
     dueDate: '',
     description: '',
+    paymentLink: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -123,6 +124,21 @@ export default function CreateInvoicePage() {
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 placeholder="Web development services for Q1..."
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Payment Link <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="url"
+                name="paymentLink"
+                value={form.paymentLink}
+                onChange={handleChange}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="https://pay.example.com/invoice/123"
+              />
+              <p className="text-xs text-gray-400 mt-1">Shown on the invoice so the client knows where to pay.</p>
             </div>
 
             <div className="flex gap-3 pt-2">

@@ -96,7 +96,14 @@ export default function InvoicesPage() {
                   className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer group"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900 text-sm">{inv.clientName}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-gray-900 text-sm">{inv.clientName}</p>
+                      {inv.recipientOnPlatform && (
+                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                          On platform
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400 mt-0.5">{inv.clientEmail}</p>
                   </div>
                   <div className="flex items-center gap-5 shrink-0">

@@ -27,6 +27,7 @@ export default function InvoiceDetailPage() {
           amount: inv.amount,
           dueDate: inv.dueDate.split('T')[0],
           description: inv.description || '',
+          paymentLink: inv.paymentLink || '',
           status: inv.status,
         });
       })
@@ -136,6 +137,16 @@ export default function InvoiceDetailPage() {
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Payment Link</label>
+                <input
+                  type="url"
+                  value={form.paymentLink}
+                  onChange={e => setForm(f => ({ ...f, paymentLink: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="https://pay.example.com/invoice/123"
+                />
+              </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Amount (INR)</label>
@@ -229,8 +240,60 @@ export default function InvoiceDetailPage() {
           )}
         </div>
 
+        {!editing && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Payment Destination</p>
+                <h2 className="font-semibold text-gray-900">Where should the client pay?</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {invoice.recipientOnPlatform
+                    ? `${invoice.recipientOnPlatform.name} is already on CollectAI. You can share the payment link below.`
+                    : 'This email is not linked to a CollectAI account yet. Share the payment details below.'}
+                </p>
+              </div>
+              {invoice.recipientOnPlatform ? (
+                <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                  On platform
+                </span>
+              ) : (
+                <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">
+                  External client
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Amount to pay</p>
+                <p className="text-lg font-semibold text-gray-900">INR {invoice.amount.toLocaleString('en-IN')}</p>
+              </div>
+
+              {invoice.paymentLink ? (
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                  <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-1">Where to pay</p>
+                  <a
+                    href={invoice.paymentLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm font-medium text-indigo-700 hover:text-indigo-800 break-all"
+                  >
+                    {invoice.paymentLink}
+                  </a>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-white p-4">
+                  <p className="text-sm text-gray-500">
+                    No payment link has been set yet. Add one in edit mode so the client knows where to pay.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {invoice.status !== 'paid' && (
-          <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-2xl border border-indigo-100 p-6">
+          <div className="bg-linear-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-2xl border border-indigo-100 p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="font-semibold text-gray-900">AI Reminder Generator</h2>

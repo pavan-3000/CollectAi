@@ -25,6 +25,7 @@ export const generateReminderMessage = async (req, res) => {
       'Client: ' + invoice.clientName,
       'Amount: INR ' + invoice.amount,
       'Due: ' + new Date(invoice.dueDate).toDateString(),
+      invoice.paymentLink ? 'Pay link: ' + invoice.paymentLink : 'No payment link provided',
       daysOverdue > 0 ? 'Days Overdue: ' + daysOverdue : 'Upcoming payment',
       'Prior reminders: ' + invoice.remainderCount,
       'Write 2-3 sentences, address client by name, firm but polite.',
