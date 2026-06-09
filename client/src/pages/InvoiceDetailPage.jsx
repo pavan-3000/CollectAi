@@ -95,7 +95,7 @@ export default function InvoiceDetailPage() {
         <div className="max-w-3xl">
 
           {/* HEADER */}
-          <div className="flex items-start justify-between mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
             <div>
               <Link to="/invoices" className="text-sm text-slate-500 hover:text-slate-300 flex items-center gap-1 mb-3 transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +128,7 @@ export default function InvoiceDetailPage() {
           <div className="bg-slate-900 border border-white/5 rounded-2xl p-6 mb-5">
             {editing ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className={labelCls}>Client Name</label>
                     <input value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} className={inputCls} />
@@ -148,7 +148,7 @@ export default function InvoiceDetailPage() {
                     placeholder="https://pay.example.com/invoice/123"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className={labelCls}>Amount (INR)</label>
                     <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
@@ -312,7 +312,7 @@ export default function InvoiceDetailPage() {
                   <p className="text-sm text-slate-400 mt-0.5">Generate a professional payment reminder with AI</p>
                 </div>
                 <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-semibold px-2.5 py-1 rounded-full">
-                  GPT-4o mini
+                  LLaMA 3.3
                 </span>
               </div>
 
