@@ -1,7 +1,13 @@
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
+  { path: '/', label: 'Home', icon: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+    </svg>
+  )},
   { path: '/dashboard', label: 'Dashboard', icon: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -28,6 +34,7 @@ export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -36,19 +43,62 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex h-screen bg-slate-950">
-      <aside className="w-60 bg-[#0d0d14] border-r border-white/5 flex flex-col fixed h-full z-10">
-        <div className="px-6 py-5 border-b border-white/5">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
+
+      {/* Mobile top bar */}
+      <div className="md:hidden fixed top-0 inset-x-0 z-30 h-14 bg-[#0d0d14] border-b border-white/5 flex items-center justify-between px-4">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
+            </svg>
+          </div>
+          <span className="font-bold text-sm text-white">CollectAI</span>
+        </div>
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white transition-colors"
+          aria-label="Open menu"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed h-full z-50 w-64 md:w-60 bg-[#0d0d14] border-r border-white/5 flex flex-col transition-transform duration-300 ease-in-out
+          md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
+          <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 group">
+            <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:opacity-80 transition-opacity">
               <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-white font-bold text-sm tracking-wide">CollectAI</h1>
+              <h1 className="text-white font-bold text-sm tracking-wide group-hover:text-indigo-300 transition-colors">CollectAI</h1>
               <p className="text-slate-500 text-xs">Invoice Collection</p>
             </div>
-          </div>
+          </Link>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Close menu"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5">
@@ -58,6 +108,7 @@ export default function Layout({ children }) {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   active
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
@@ -93,7 +144,8 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      <main className="ml-60 flex-1 overflow-auto min-h-screen">
+      {/* Main content */}
+      <main className="flex-1 overflow-auto min-h-screen md:ml-60 pt-14 md:pt-0">
         {children}
       </main>
     </div>

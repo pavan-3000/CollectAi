@@ -173,7 +173,7 @@ export default function HomePage() {
           <div>
             <div className="inline-flex items-center gap-2 bg-white/6 border border-white/10 text-slate-200 text-xs font-medium px-3.5 py-1.5 rounded-full mb-7 backdrop-blur-md">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-              Powered by GPT-4o mini
+              Powered by LLaMA 3.3 via Groq
             </div>
 
             <h1 className="text-5xl sm:text-6xl font-black leading-[1.08] tracking-tight mb-6">

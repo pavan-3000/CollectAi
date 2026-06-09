@@ -81,12 +81,12 @@ export default function PaymentsPage() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-slate-950 p-6 lg:p-8">
+      <div className="min-h-screen bg-slate-950 p-4 sm:p-6 lg:p-8">
 
         {/* PAGE HEADER */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-2xl font-black text-white">Payments</h1>
+            <h1 className="text-xl sm:text-2xl font-black text-white">Payments</h1>
             <p className="text-slate-500 text-sm mt-1">Track what you collect and what you owe</p>
           </div>
           <Link
@@ -101,7 +101,7 @@ export default function PaymentsPage() {
         </div>
 
         {/* MODE SWITCHER */}
-        <div className="flex gap-1 bg-slate-900 border border-white/5 rounded-xl p-1 mb-6 w-fit">
+        <div className="flex gap-1 bg-slate-900 border border-white/5 rounded-xl p-1 mb-6 w-full sm:w-fit">
           <button
             onClick={() => setMode('collecting')}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
