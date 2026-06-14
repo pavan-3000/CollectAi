@@ -1,0 +1,199 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE = "${JOB_NAME.toLowerCase().replaceAll('[^a-z0-9-]', '-')}"
+        DOCKER_TAG   = "${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup Tools') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    sh '''
+                        TOOLS_DIR="$HOME/devpilot-tools"
+                        mkdir -p "$TOOLS_DIR/bin"
+
+                        if ! which docker 2>/dev/null && [ ! -x "$TOOLS_DIR/bin/docker" ]; then
+                            DOCKER_VERSION=24.0.7
+                            curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" -o /tmp/docker-cli.tgz 2>/dev/null || true
+                            tar -xz -C /tmp -f /tmp/docker-cli.tgz 2>/dev/null || true
+                            mv /tmp/docker/docker "$TOOLS_DIR/bin/docker" 2>/dev/null || true
+                            rm -rf /tmp/docker-cli.tgz /tmp/docker 2>/dev/null || true
+                        fi
+
+                        if ! which trivy 2>/dev/null && [ ! -x "$TOOLS_DIR/bin/trivy" ]; then
+                            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$TOOLS_DIR/bin" 2>/dev/null || true
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            when { expression { return fileExists('server/Dockerfile') } }
+            steps {
+                script {
+                    def dockerAvailable = sh(script: 'which docker 2>/dev/null || test -x /usr/bin/docker', returnStatus: true) == 0
+                    if (dockerAvailable) {
+                        def daemonOk = sh(script: 'docker info > /dev/null 2>&1', returnStatus: true) == 0
+                        if (daemonOk) {
+                            retry(2) {
+                                sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ./server"
+                            }
+                            sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest"
+                        } else {
+                            echo 'Docker daemon not reachable — run: docker exec jenkins chmod 666 /var/run/docker.sock'
+                        }
+                    } else {
+                        echo 'Docker not available — install Docker in the Jenkins image or mount the socket'
+                    }
+                }
+            }
+        }
+
+        stage('Trivy Scan') {
+            when { expression { return fileExists('server/Dockerfile') } }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    script {
+                        withEnv(["PATH+DEVPILOT=${env.HOME}/devpilot-tools/bin"]) {
+                            def trivyOk = sh(script: 'which trivy 2>/dev/null', returnStatus: true) == 0
+                            if (trivyOk) {
+                                sh "trivy image --exit-code 0 --severity HIGH,CRITICAL --format table ${DOCKER_IMAGE}:${DOCKER_TAG} | tee trivy-report.txt"
+                                archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true
+                            } else {
+                                echo 'Trivy not available — skipping scan'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Push to Registry') {
+            when { expression { return fileExists('server/Dockerfile') } }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    script {
+                        withCredentials([usernamePassword(credentialsId: 'devpilot-registry-1780113915287', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+                            sh '''
+                                BRANCH_TAG=$(echo ${GIT_BRANCH:-${BRANCH_NAME:-main}} | sed 's|origin/||' | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+                                echo $REG_PASS | docker login -u $REG_USER --password-stdin
+                                docker tag $DOCKER_IMAGE:$DOCKER_TAG pav30/collectai-backend:$DOCKER_TAG-$BRANCH_TAG
+                                docker push pav30/collectai-backend:$DOCKER_TAG-$BRANCH_TAG
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to VM') {
+            when { expression { return fileExists('server/Dockerfile') } }
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    script {
+                        withCredentials([sshUserPrivateKey(credentialsId: 'devpilot-deploy-pavan-3000-CollectAi-payment-integration', keyFileVariable: 'SSH_KEY'), usernamePassword(credentialsId: 'devpilot-registry-1780113915287', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+                            sh '''
+                                BRANCH_TAG=$(echo ${GIT_BRANCH:-${BRANCH_NAME:-main}} | sed 's|origin/||' | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+                                REG_PASS_B64=$(echo -n "$REG_PASS" | base64 -w0)
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.242.246.209 "echo $REG_PASS_B64 | base64 -d | docker login -u $REG_USER --password-stdin"
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.242.246.209 "mkdir -p ~/devpilot-app && echo 'UE9SVD04MDgwCk1PTkdPX1VSST1tb25nb2RiK3NydjovL3NhZ2FyYmlzdDM3Ml9kYl91c2VyOndvZnFxcVVCTktnWEhRY1hAY2x1c3RlcjAuNnVubnNydy5tb25nb2RiLm5ldC8/YXBwTmFtZT1DbHVzdGVyMApKV1RfU0VDUkVUPWJhN2MzZDQ4OWI4YTdiZjIzOTU0NDM4MTFkZjM1OTUyNWFhMDRkODFmNTM5NWNiNTI1MGE0Zjc0Y2Q2MmVjNDQKR1JPUV9BUElfS0VZPWdza19ZVnlocVBsYWp6YjZ5ODZ6N0phUldHZHliM0ZZVHp5b3lSN0RjeFFLaDlSZWlRSzNzN0JKCkNMSUVOVF9VUkw9aHR0cHM6Ly9jb2xsZWN0YWkuZGV2bGF1Y2guY29tCk5PREVfRU5WPXByb2R1Y3Rpb24KCk5HUk9LX0FVVEhUT0tFTj0zRWtQMWtYTnJ0Vmp0b0R2eGNZUlZwb056TnVfNURYTEQ3N2ZUV2Vhb3BGb0t1a1UzCk5HUk9LX0RPTUFJTj1rcnlwdG9uLXRoaWV2aW5nLXNob3diaXoubmdyb2stZnJlZS5kZXYKClNNVFBfSE9TVD1zbXRwLmdtYWlsLmNvbQpTTVRQX1BPUlQ9NTg3ClNNVFBfVVNFUj1zYWdhcmJpc3QzNzJAZ21haWwuY29tClNNVFBfUEFTUz1ldHVpIGFmcGsgbmd1eiB0ZXBhClNNVFBfRlJPTV9OQU1FPUNvbGxlY3RBSSAKCgpDQVNIRlJFRV9BUFBfSUQ9VEVTVDEwOTA1MDAxMTg3N2E0ODcwMzY5MDU5NzkxMzUxMDA1MDkwMQpDQVNIRlJFRV9TRUNSRVRfS0VZPWNmc2tfbWFfdGVzdF8wZDc5ZmU3MDhjMGU2NzE2NTk2ODk3MzZmYzE1NWVlYl81MTI3OThkMwpDQVNIRlJFRV9FTlY9U0FOREJPWA==' | base64 -d > ~/devpilot-app/backend.env"
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.242.246.209 "pip3 install pyyaml -q 2>/dev/null || true; echo \"aW1wb3J0IHlhbWwsIHN5cywgb3MsIGZjbnRsCnBhdGggPSBvcy5wYXRoLmV4cGFuZHVzZXIoJ34vZGV2cGlsb3QtYXBwL2RvY2tlci1jb21wb3NlLnltbCcpCnRhZyA9IHN5cy5hcmd2WzFdCm9zLm1ha2VkaXJzKG9zLnBhdGguZXhwYW5kdXNlcignfi9kZXZwaWxvdC1hcHAnKSwgZXhpc3Rfb2s9VHJ1ZSkKbGYgPSBvcGVuKG9zLnBhdGguZXhwYW5kdXNlcignfi9kZXZwaWxvdC1hcHAvLmRldnBpbG90LmxvY2snKSwgJ3cnKQpmY250bC5mbG9jayhsZiwgZmNudGwuTE9DS19FWCkKdHJ5OgogdHJ5OgogIHdpdGggb3BlbihwYXRoKSBhcyBmOiBkYXRhID0geWFtbC5zYWZlX2xvYWQoZikgb3Ige30KIGV4Y2VwdCBFeGNlcHRpb246CiAgZGF0YSA9IHt9CiBpZiBub3QgaXNpbnN0YW5jZShkYXRhLmdldCgnc2VydmljZXMnKSwgZGljdCk6IGRhdGFbJ3NlcnZpY2VzJ10gPSB7fQogZXhpc3RpbmcgPSBkYXRhWydzZXJ2aWNlcyddLmdldCgnYmFja2VuZCcpCiBwcmludCgnW2RldnBpbG90XSBzZXJ2aWNlPWJhY2tlbmQgZXhpc3Rpbmc9JyArIHN0cihleGlzdGluZyBpcyBub3QgTm9uZSkpCiBpZiBleGlzdGluZzoKICBwcmludCgnW2RldnBpbG90XSBvbGQgaW1hZ2U9JyArIHN0cihleGlzdGluZy5nZXQoJ2ltYWdlJykpICsgJyBvbGQgcG9ydHM9JyArIHN0cihleGlzdGluZy5nZXQoJ3BvcnRzJykpKQogIGV4aXN0aW5nWydpbWFnZSddID0gJ3BhdjMwL2NvbGxlY3RhaS1iYWNrZW5kOicgKyB0YWcKICBleGlzdGluZ1snY29udGFpbmVyX25hbWUnXSA9ICdiYWNrZW5kJwogIGV4aXN0aW5nWydwb3J0cyddID0gWyc4MDA6ODA4MCddCiAgcHJpbnQoJ1tkZXZwaWxvdF0gbmV3IGltYWdlPScgKyBleGlzdGluZ1snaW1hZ2UnXSArICcgbmV3IHBvcnRzPScgKyBzdHIoZXhpc3RpbmcuZ2V0KCdwb3J0cycpKSkKICBkYXRhWydzZXJ2aWNlcyddWydiYWNrZW5kJ10gPSBleGlzdGluZwogZWxzZToKICBwcmludCgnW2RldnBpbG90XSBjcmVhdGluZyBuZXcgc2VydmljZSBibG9jaycpCiAgc3ZjID0geydpbWFnZSc6ICdwYXYzMC9jb2xsZWN0YWktYmFja2VuZDonICsgdGFnLCAnY29udGFpbmVyX25hbWUnOiAnYmFja2VuZCcsICdyZXN0YXJ0JzogJ3VubGVzcy1zdG9wcGVkJ30KICBzdmNbJ3BvcnRzJ10gPSBbJzgwMDo4MDgwJ10KICBzdmNbJ2Vudl9maWxlJ10gPSBbJ34vZGV2cGlsb3QtYXBwL2JhY2tlbmQuZW52J10KICBwcmludCgnW2RldnBpbG90XSBuZXcgc2VydmljZSBwb3J0cz0nICsgc3RyKHN2Yy5nZXQoJ3BvcnRzJykpKQogIGRhdGFbJ3NlcnZpY2VzJ11bJ2JhY2tlbmQnXSA9IHN2Ywogd2l0aCBvcGVuKHBhdGgsICd3JykgYXMgZjogeWFtbC5kdW1wKGRhdGEsIGYsIGRlZmF1bHRfZmxvd19zdHlsZT1GYWxzZSkKIHByaW50KCdbZGV2cGlsb3RdIHdyaXR0ZW4gdG8gJyArIHBhdGgpCiBwcmludCgnYmFja2VuZCAtPiBwYXYzMC9jb2xsZWN0YWktYmFja2VuZDonICsgdGFnKQpmaW5hbGx5OgogZmNudGwuZmxvY2sobGYsIGZjbnRsLkxPQ0tfVU4pCiBsZi5jbG9zZSgp\" | base64 -d > /tmp/devpilot_backend.py"
+                                PREV_TAG=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.242.246.209 "grep 'image: pav30/collectai-backend:' ~/devpilot-app/docker-compose.yml 2>/dev/null | awk '{print $NF}' | head -1 || echo ''")
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@54.242.246.209 "python3 /tmp/devpilot_backend.py ${BUILD_NUMBER}-${BRANCH_TAG}"
+                                COMPOSE_CMD=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.242.246.209 "docker compose version >/dev/null 2>&1 && echo 'docker compose' || echo 'docker-compose'")
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=60 ubuntu@54.242.246.209 "cd ~/devpilot-app && $COMPOSE_CMD pull backend && $COMPOSE_CMD up -d" || {
+                                    echo "Deploy failed — rolling back to $PREV_TAG"
+                                    [ -n "$PREV_TAG" ] && ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.242.246.209 "sed -i 's|image: pav30/collectai-backend:.*|image: $PREV_TAG|' ~/devpilot-app/docker-compose.yml && cd ~/devpilot-app && $COMPOSE_CMD up -d" || true
+                                    exit 1
+                                }
+                                echo "Deployed backend to http://54.242.246.209"
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                def status = currentBuild.result ?: 'IN_PROGRESS'
+                def promptText = "Analyze this Jenkins CI/CD build and give 2-3 actionable bullet points: what passed, what failed (if any), and one improvement.\nJob: ${env.JOB_NAME} Build#${env.BUILD_NUMBER} Branch: ${env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'} Status: ${status}"
+                def aiDone = false
+
+                for (def credId : ['devpilot-anthropic-key', 'ANTHROPIC_API_KEY']) {
+                    if (aiDone) break
+                    try {
+                        withCredentials([string(credentialsId: credId, variable: 'ANTHROPIC_KEY')]) {
+                            writeFile file: '.ai-payload.json', text: groovy.json.JsonOutput.toJson([
+                                model: 'claude-haiku-4-5-20251001',
+                                max_tokens: 350,
+                                messages: [[role: 'user', content: promptText]]
+                            ])
+                            def rc = sh returnStatus: true, script: '''
+                                curl -sf -X POST https://api.anthropic.com/v1/messages \
+                                  -H 'Content-Type: application/json' \
+                                  -H "x-api-key: $ANTHROPIC_KEY" \
+                                  -H 'anthropic-version: 2023-06-01' \
+                                  --max-time 30 \
+                                  -d @.ai-payload.json \
+                                  -o .ai-response.json
+                            '''
+                            if (rc == 0) {
+                                def resp = new groovy.json.JsonSlurper().parseText(readFile('.ai-response.json'))
+                                echo "\n=== Claude AI Build Analysis ===\n${resp.content[0].text}\n================================"
+                                writeFile file: 'ai-analysis.json', text: readFile('.ai-response.json')
+                                archiveArtifacts artifacts: 'ai-analysis.json', allowEmptyArchive: true
+                                aiDone = true
+                            }
+                        }
+                    } catch (ignored) {}
+                }
+
+                for (def credId : ['devpilot-openai-key', 'OPENAI_API_KEY']) {
+                    if (aiDone) break
+                    try {
+                        withCredentials([string(credentialsId: credId, variable: 'OPENAI_KEY')]) {
+                            writeFile file: '.ai-payload.json', text: groovy.json.JsonOutput.toJson([
+                                model: 'gpt-4o-mini',
+                                max_tokens: 350,
+                                messages: [[role: 'user', content: promptText]]
+                            ])
+                            def rc = sh returnStatus: true, script: '''
+                                curl -sf -X POST https://api.openai.com/v1/chat/completions \
+                                  -H 'Content-Type: application/json' \
+                                  -H "Authorization: Bearer $OPENAI_KEY" \
+                                  --max-time 30 \
+                                  -d @.ai-payload.json \
+                                  -o .ai-response.json
+                            '''
+                            if (rc == 0) {
+                                def resp = new groovy.json.JsonSlurper().parseText(readFile('.ai-response.json'))
+                                echo "\n=== ChatGPT Build Analysis ===\n${resp.choices[0].message.content}\n==============================="
+                                writeFile file: 'ai-analysis.json', text: readFile('.ai-response.json')
+                                archiveArtifacts artifacts: 'ai-analysis.json', allowEmptyArchive: true
+                                aiDone = true
+                            }
+                        }
+                    } catch (ignored) {}
+                }
+
+                if (!aiDone) {
+                    echo 'AI analysis skipped — configure an API key in DevPilot Settings (Claude or ChatGPT)'
+                }
+            }
+        }
+        success { echo 'Pipeline succeeded!' }
+        failure  { echo 'Pipeline failed!' }
+    }
+}
