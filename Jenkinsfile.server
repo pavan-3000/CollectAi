@@ -36,23 +36,6 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    script {
-                        def sonarOk = sh(script: 'which sonar-scanner 2>/dev/null', returnStatus: true) == 0
-                        if (sonarOk) {
-                            withSonarQubeEnv('SonarQube') {
-                                sh 'npx --yes sonar-scanner -Dsonar.projectKey=${env.JOB_NAME} -Dsonar.sources=. -Dsonar.host.url=${SONAR_HOST_URL}'
-                            }
-                        } else {
-                            echo 'sonar-scanner not found — configure SonarQube Scanner in Jenkins → Manage Jenkins → Tools'
-                        }
-                    }
-                }
-            }
-        }
-
         stage('Docker Build') {
             when { expression { return fileExists('server/Dockerfile') } }
             steps {
@@ -99,7 +82,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     script {
-                        withCredentials([usernamePassword(credentialsId: 'devpilot-registry-1780113915287', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+                        withCredentials([usernamePassword(credentialsId: 'devpilot-registry-1782053771939', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
                             sh '''
                                 BRANCH_TAG=$(echo ${GIT_BRANCH:-${BRANCH_NAME:-main}} | sed 's|origin/||' | tr '/' '-' | tr '[:upper:]' '[:lower:]')
                                 echo $REG_PASS | docker login -u $REG_USER --password-stdin
@@ -117,22 +100,22 @@ pipeline {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                     script {
-                        withCredentials([sshUserPrivateKey(credentialsId: 'devpilot-deploy-pavan-3000-CollectAi-payment-integration', keyFileVariable: 'SSH_KEY'), usernamePassword(credentialsId: 'devpilot-registry-1780113915287', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+                        withCredentials([sshUserPrivateKey(credentialsId: 'devpilot-deploy-pavan-3000-CollectAi-payment-integration', keyFileVariable: 'SSH_KEY'), usernamePassword(credentialsId: 'devpilot-registry-1782053771939', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
                             sh '''
                                 BRANCH_TAG=$(echo ${GIT_BRANCH:-${BRANCH_NAME:-main}} | sed 's|origin/||' | tr '/' '-' | tr '[:upper:]' '[:lower:]')
                                 REG_PASS_B64=$(echo -n "$REG_PASS" | base64 -w0)
-                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.90.145.163 "echo $REG_PASS_B64 | base64 -d | docker login -u $REG_USER --password-stdin"
-                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.90.145.163 "mkdir -p ~/devpilot-app && echo 'UE9SVD04MDgwCgpNT05HT19VUkk9bW9uZ29kYitzcnY6Ly9zYWdhcmJpc3QzNzJfZGJfdXNlcjp3aFpYUk1ITnh0eFNwbXVQQGNsdXN0ZXIwLjZ1bm5zcncubW9uZ29kYi5uZXQvP2FwcE5hbWU9Q2x1c3RlcjAKSldUX1NFQ1JFVD1iYTdjM2Q0ODliOGE3YmYyMzk1NDQzODExZGYzNTk1MjVhYTA0ZDgxZjUzOTVjYjUyNTBhNGY3NGNkNjJlYzQ0CkdST1FfQVBJX0tFWT1nc2tfWVZ5aHFQbGFqemI2eTg2ejdKYVJXR2R5YjNGWVR6eW95UjdEY3hRS2g5UmVpUUszczdCSgpDTElFTlRfVVJMPWNvbGxlY3RhaS5kZXZsYXVjaC5jb20KTk9ERV9FTlY9cHJvZHVjdGlvbgoKTkdST0tfQVVUSFRPS0VOPTNFa1Axa1hOcnRWanRvRHZ4Y1lSVnBvTnpOdV81RFhMRDc3ZlRXZWFvcEZvS3VrVTMKTkdST0tfRE9NQUlOPWNvbGxlY3RhaS5kZXZsYXVjaC5jb20KClNNVFBfSE9TVD1zbXRwLmdtYWlsLmNvbQpTTVRQX1BPUlQ9NTg3ClNNVFBfVVNFUj1zYWdhcmJpc3QzNzJAZ21haWwuY29tClNNVFBfUEFTUz1ldHVpIGFmcGsgbmd1eiB0ZXBhClNNVFBfRlJPTV9OQU1FPUNvbGxlY3RBSSAKCgpDQVNIRlJFRV9BUFBfSUQ9VEVTVDEwOTA1MDAxMTg3N2E0ODcwMzY5MDU5NzkxMzUxMDA1MDkwMQpDQVNIRlJFRV9TRUNSRVRfS0VZPWNmc2tfbWFfdGVzdF8wZDc5ZmU3MDhjMGU2NzE2NTk2ODk3MzZmYzE1NWVlYl81MTI3OThkMwpDQVNIRlJFRV9FTlY9U0FOREJPWA==' | base64 -d > ~/devpilot-app/backend.env"
-                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.90.145.163 "pip3 install pyyaml -q 2>/dev/null || true; echo \"aW1wb3J0IHlhbWwsIHN5cywgb3MsIGZjbnRsCnBhdGggPSBvcy5wYXRoLmV4cGFuZHVzZXIoJ34vZGV2cGlsb3QtYXBwL2RvY2tlci1jb21wb3NlLnltbCcpCnRhZyA9IHN5cy5hcmd2WzFdCm9zLm1ha2VkaXJzKG9zLnBhdGguZXhwYW5kdXNlcignfi9kZXZwaWxvdC1hcHAnKSwgZXhpc3Rfb2s9VHJ1ZSkKbGYgPSBvcGVuKG9zLnBhdGguZXhwYW5kdXNlcignfi9kZXZwaWxvdC1hcHAvLmRldnBpbG90LmxvY2snKSwgJ3cnKQpmY250bC5mbG9jayhsZiwgZmNudGwuTE9DS19FWCkKdHJ5OgogdHJ5OgogIHdpdGggb3BlbihwYXRoKSBhcyBmOiBkYXRhID0geWFtbC5zYWZlX2xvYWQoZikgb3Ige30KIGV4Y2VwdCBFeGNlcHRpb246CiAgZGF0YSA9IHt9CiBpZiBub3QgaXNpbnN0YW5jZShkYXRhLmdldCgnc2VydmljZXMnKSwgZGljdCk6IGRhdGFbJ3NlcnZpY2VzJ10gPSB7fQogZXhpc3RpbmcgPSBkYXRhWydzZXJ2aWNlcyddLmdldCgnYmFja2VuZCcpCiBwcmludCgnW2RldnBpbG90XSBzZXJ2aWNlPWJhY2tlbmQgZXhpc3Rpbmc9JyArIHN0cihleGlzdGluZyBpcyBub3QgTm9uZSkpCiBpZiBleGlzdGluZzoKICBwcmludCgnW2RldnBpbG90XSBvbGQgaW1hZ2U9JyArIHN0cihleGlzdGluZy5nZXQoJ2ltYWdlJykpICsgJyBvbGQgcG9ydHM9JyArIHN0cihleGlzdGluZy5nZXQoJ3BvcnRzJykpKQogIGV4aXN0aW5nWydpbWFnZSddID0gJ3BhdjMwL2NvbGxlY3RhaS1iYWNrZW5kOicgKyB0YWcKICBleGlzdGluZ1snY29udGFpbmVyX25hbWUnXSA9ICdiYWNrZW5kJwogIGV4aXN0aW5nWydwb3J0cyddID0gWyc4MDA6ODA4MCddCiAgcHJpbnQoJ1tkZXZwaWxvdF0gbmV3IGltYWdlPScgKyBleGlzdGluZ1snaW1hZ2UnXSArICcgbmV3IHBvcnRzPScgKyBzdHIoZXhpc3RpbmcuZ2V0KCdwb3J0cycpKSkKICBkYXRhWydzZXJ2aWNlcyddWydiYWNrZW5kJ10gPSBleGlzdGluZwogZWxzZToKICBwcmludCgnW2RldnBpbG90XSBjcmVhdGluZyBuZXcgc2VydmljZSBibG9jaycpCiAgc3ZjID0geydpbWFnZSc6ICdwYXYzMC9jb2xsZWN0YWktYmFja2VuZDonICsgdGFnLCAnY29udGFpbmVyX25hbWUnOiAnYmFja2VuZCcsICdyZXN0YXJ0JzogJ3VubGVzcy1zdG9wcGVkJ30KICBzdmNbJ3BvcnRzJ10gPSBbJzgwMDo4MDgwJ10KICBzdmNbJ2Vudl9maWxlJ10gPSBbJ34vZGV2cGlsb3QtYXBwL2JhY2tlbmQuZW52J10KICBwcmludCgnW2RldnBpbG90XSBuZXcgc2VydmljZSBwb3J0cz0nICsgc3RyKHN2Yy5nZXQoJ3BvcnRzJykpKQogIGRhdGFbJ3NlcnZpY2VzJ11bJ2JhY2tlbmQnXSA9IHN2Ywogd2l0aCBvcGVuKHBhdGgsICd3JykgYXMgZjogeWFtbC5kdW1wKGRhdGEsIGYsIGRlZmF1bHRfZmxvd19zdHlsZT1GYWxzZSkKIHByaW50KCdbZGV2cGlsb3RdIHdyaXR0ZW4gdG8gJyArIHBhdGgpCiBwcmludCgnYmFja2VuZCAtPiBwYXYzMC9jb2xsZWN0YWktYmFja2VuZDonICsgdGFnKQpmaW5hbGx5OgogZmNudGwuZmxvY2sobGYsIGZjbnRsLkxPQ0tfVU4pCiBsZi5jbG9zZSgp\" | base64 -d > /tmp/devpilot_backend.py"
-                                PREV_TAG=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.90.145.163 "grep 'image: pav30/collectai-backend:' ~/devpilot-app/docker-compose.yml 2>/dev/null | awk '{print $NF}' | head -1 || echo ''")
-                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@54.90.145.163 "python3 /tmp/devpilot_backend.py ${BUILD_NUMBER}-${BRANCH_TAG}"
-                                COMPOSE_CMD=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.90.145.163 "docker compose version >/dev/null 2>&1 && echo 'docker compose' || echo 'docker-compose'")
-                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=60 ubuntu@54.90.145.163 "cd ~/devpilot-app && $COMPOSE_CMD pull backend && $COMPOSE_CMD up -d" || {
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@98.93.247.121 "echo $REG_PASS_B64 | base64 -d | docker login -u $REG_USER --password-stdin"
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@98.93.247.121 "mkdir -p ~/devpilot-app && echo 'UE9SVD04MDgwCgpNT05HT19VUkk9bW9uZ29kYitzcnY6Ly9zYWdhcmJpc3QzNzJfZGJfdXNlcjp3aFpYUk1ITnh0eFNwbXVQQGNsdXN0ZXIwLjZ1bm5zcncubW9uZ29kYi5uZXQvP2FwcE5hbWU9Q2x1c3RlcjAKCkpXVF9TRUNSRVQ9VGhpc0lzQVNlY3JldEtleUZvckpXVAoKR1JPUV9BUElfS0VZPWdza19ZVnlocVBsYWp6YjZ5ODZ6N0phUldHZHliM0ZZVHp5b3lSN0RjeFFLaDlSZWlRSzNzN0JKCgpTTVRQX0hPU1Q9c210cC5nbWFpbC5jb20KU01UUF9QT1JUPTU4NwpTTVRQX1VTRVI9c2FnYXJiaXN0MzcyQGdtYWlsLmNvbQpTTVRQX1BBU1M9ZXR1aSBhZnBrIG5ndXogdGVwYQpTTVRQX0ZST01fTkFNRT1Db2xsZWN0QUkKCkNMSUVOVF9VUkw9aHR0cDovL2xvY2FsaG9zdDo1MTczCgpDQVNIRlJFRV9BUFBfSUQ9VEVTVDEwOTA1MDAxMTg3N2E0ODcwMzY5MDU5NzkxMzUxMDA1MDkwMQpDQVNIRlJFRV9TRUNSRVRfS0VZPWNmc2tfbWFfdGVzdF8wZDc5ZmU3MDhjMGU2NzE2NTk2ODk3MzZmYzE1NWVlYl81MTI3OThkMwpDQVNIRlJFRV9FTlY9U0FOREJPWA==' | base64 -d > ~/devpilot-app/backend.env"
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@98.93.247.121 "pip3 install pyyaml -q 2>/dev/null || true; echo \"aW1wb3J0IHlhbWwsIHN5cywgb3MsIGZjbnRsCnBhdGggPSBvcy5wYXRoLmV4cGFuZHVzZXIoJ34vZGV2cGlsb3QtYXBwL2RvY2tlci1jb21wb3NlLnltbCcpCnRhZyA9IHN5cy5hcmd2WzFdCm9zLm1ha2VkaXJzKG9zLnBhdGguZXhwYW5kdXNlcignfi9kZXZwaWxvdC1hcHAnKSwgZXhpc3Rfb2s9VHJ1ZSkKbGYgPSBvcGVuKG9zLnBhdGguZXhwYW5kdXNlcignfi9kZXZwaWxvdC1hcHAvLmRldnBpbG90LmxvY2snKSwgJ3cnKQpmY250bC5mbG9jayhsZiwgZmNudGwuTE9DS19FWCkKdHJ5OgogdHJ5OgogIHdpdGggb3BlbihwYXRoKSBhcyBmOiBkYXRhID0geWFtbC5zYWZlX2xvYWQoZikgb3Ige30KIGV4Y2VwdCBFeGNlcHRpb246CiAgZGF0YSA9IHt9CiBpZiBub3QgaXNpbnN0YW5jZShkYXRhLmdldCgnc2VydmljZXMnKSwgZGljdCk6IGRhdGFbJ3NlcnZpY2VzJ10gPSB7fQogZXhpc3RpbmcgPSBkYXRhWydzZXJ2aWNlcyddLmdldCgnYmFja2VuZCcpCiBwcmludCgnW2RldnBpbG90XSBzZXJ2aWNlPWJhY2tlbmQgZXhpc3Rpbmc9JyArIHN0cihleGlzdGluZyBpcyBub3QgTm9uZSkpCiBpZiBleGlzdGluZzoKICBwcmludCgnW2RldnBpbG90XSBvbGQgaW1hZ2U9JyArIHN0cihleGlzdGluZy5nZXQoJ2ltYWdlJykpICsgJyBvbGQgcG9ydHM9JyArIHN0cihleGlzdGluZy5nZXQoJ3BvcnRzJykpKQogIGV4aXN0aW5nWydpbWFnZSddID0gJ3BhdjMwL2NvbGxlY3RhaS1iYWNrZW5kOicgKyB0YWcKICBleGlzdGluZ1snY29udGFpbmVyX25hbWUnXSA9ICdiYWNrZW5kJwogIGV4aXN0aW5nWydwb3J0cyddID0gWyczMDAwOjMwMDAnXQogIHByaW50KCdbZGV2cGlsb3RdIG5ldyBpbWFnZT0nICsgZXhpc3RpbmdbJ2ltYWdlJ10gKyAnIG5ldyBwb3J0cz0nICsgc3RyKGV4aXN0aW5nLmdldCgncG9ydHMnKSkpCiAgZGF0YVsnc2VydmljZXMnXVsnYmFja2VuZCddID0gZXhpc3RpbmcKIGVsc2U6CiAgcHJpbnQoJ1tkZXZwaWxvdF0gY3JlYXRpbmcgbmV3IHNlcnZpY2UgYmxvY2snKQogIHN2YyA9IHsnaW1hZ2UnOiAncGF2MzAvY29sbGVjdGFpLWJhY2tlbmQ6JyArIHRhZywgJ2NvbnRhaW5lcl9uYW1lJzogJ2JhY2tlbmQnLCAncmVzdGFydCc6ICd1bmxlc3Mtc3RvcHBlZCd9CiAgc3ZjWydwb3J0cyddID0gWyczMDAwOjMwMDAnXQogIHN2Y1snZW52X2ZpbGUnXSA9IFsnfi9kZXZwaWxvdC1hcHAvYmFja2VuZC5lbnYnXQogIHByaW50KCdbZGV2cGlsb3RdIG5ldyBzZXJ2aWNlIHBvcnRzPScgKyBzdHIoc3ZjLmdldCgncG9ydHMnKSkpCiAgZGF0YVsnc2VydmljZXMnXVsnYmFja2VuZCddID0gc3ZjCiB3aXRoIG9wZW4ocGF0aCwgJ3cnKSBhcyBmOiB5YW1sLmR1bXAoZGF0YSwgZiwgZGVmYXVsdF9mbG93X3N0eWxlPUZhbHNlKQogcHJpbnQoJ1tkZXZwaWxvdF0gd3JpdHRlbiB0byAnICsgcGF0aCkKIHByaW50KCdiYWNrZW5kIC0+IHBhdjMwL2NvbGxlY3RhaS1iYWNrZW5kOicgKyB0YWcpCmZpbmFsbHk6CiBmY250bC5mbG9jayhsZiwgZmNudGwuTE9DS19VTikKIGxmLmNsb3NlKCk=\" | base64 -d > /tmp/devpilot_backend.py"
+                                PREV_TAG=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@98.93.247.121 "grep 'image: pav30/collectai-backend:' ~/devpilot-app/docker-compose.yml 2>/dev/null | awk '{print \$NF}' | head -1 || echo ''")
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@98.93.247.121 "python3 /tmp/devpilot_backend.py ${BUILD_NUMBER}-${BRANCH_TAG}"
+                                COMPOSE_CMD=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@98.93.247.121 "docker compose version >/dev/null 2>&1 && echo 'docker compose' || echo 'docker-compose'")
+                                ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=60 ubuntu@98.93.247.121 "cd ~/devpilot-app && $COMPOSE_CMD pull backend && $COMPOSE_CMD up -d --no-deps backend" || {
                                     echo "Deploy failed — rolling back to $PREV_TAG"
-                                    [ -n "$PREV_TAG" ] && ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@54.90.145.163 "sed -i 's|image: pav30/collectai-backend:.*|image: $PREV_TAG|' ~/devpilot-app/docker-compose.yml && cd ~/devpilot-app && $COMPOSE_CMD up -d" || true
+                                    [ -n "$PREV_TAG" ] && ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ubuntu@98.93.247.121 "sed -i 's|image: pav30/collectai-backend:.*|image: $PREV_TAG|' ~/devpilot-app/docker-compose.yml && cd ~/devpilot-app && $COMPOSE_CMD up -d --no-deps backend" || true
                                     exit 1
                                 }
-                                echo "Deployed backend to http://54.90.145.163"
+                                echo "Deployed backend to http://98.93.247.121"
                             '''
                         }
                     }
